@@ -50,6 +50,14 @@
                     - API key management<br>
                     - Usage monitoring
                 </p>
+                {% if current_user.is_authenticated %}
+                <hr>
+                <p class="text-center">
+                    <a href="{{ url_for('admin.analytics') }}" class="btn btn-sm btn-outline-primary">
+                        Already an enterprise user? Click here to view usage monitoring
+                    </a>
+                </p>
+                {% endif %}
             </div>
         </div>
     </div>
