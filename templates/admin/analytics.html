@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2>Usage Analytics</h2>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Daily Signing Requests</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="dailySigningChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>API Key Usage Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="keyUsageChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Recent Signing Jobs</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Job ID</th>
+                            <th>API Key</th>
+                            <th>Status</th>
+                            <th>Created At</th>
+                            <th>Completed At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in recent_jobs %}
+                        <tr>
+                            <td>{{ job.id }}</td>
+                            <td>{{ job.api_key.name }}</td>
+                            <td>
+                                {% if job.status == 'completed' %}
+                                <span class="badge bg-success">Completed</span>
+                                {% elif job.status == 'failed' %}
+                                <span class="badge bg-danger">Failed</span>
+                                {% else %}
+                                <span class="badge bg-warning">{{ job.status|title }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>{{ job.completed_at.strftime('%Y-%m-%d %H:%M:%S') if job.completed_at else '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Daily Signing Requests Chart
+    new Chart(document.getElementById('dailySigningChart'), {
+        type: 'line',
+        data: {
+            labels: {{ dates|tojson }},
+            datasets: [{
+                label: 'Signing Requests',
+                data: {{ daily_counts|tojson }},
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+
+    // API Key Usage Distribution Chart
+    new Chart(document.getElementById('keyUsageChart'), {
+        type: 'doughnut',
+        data: {
+            labels: {{ key_names|tojson }},
+            datasets: [{
+                data: {{ key_usage|tojson }},
+                backgroundColor: [
+                    'rgb(255, 99, 132)',
+                    'rgb(54, 162, 235)',
+                    'rgb(255, 205, 86)',
+                    'rgb(75, 192, 192)',
+                    'rgb(153, 102, 255)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true
+        }
+    });
+});
+</script>
+{% endblock %}
