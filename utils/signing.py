@@ -1,9 +1,6 @@
 import os
-import subprocess
-import tempfile
 import shutil
 import logging
-from .install_zsign import install_zsign
 from .ipa_signer import IPASigner
 from .certificate_handler import CertificateHandler
 from .provisioning import ProvisioningProfile
@@ -12,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 def sign_ipa(ipa_path: str, p12_path: str, prov_path: str, p12_password: str) -> str:
     """
-    Sign an IPA file using custom implementation with zsign fallback
+    Sign an IPA file using custom implementation
     
     Args:
         ipa_path: Path to input IPA file
@@ -24,66 +21,33 @@ def sign_ipa(ipa_path: str, p12_path: str, prov_path: str, p12_password: str) ->
         Path to signed IPA file
         
     Raises:
-        Exception: If signing fails
+        Exception: If signing fails with detailed error message
     """
     try:
-        # Try custom implementation first
+        # Initialize handlers
         cert_handler = CertificateHandler(p12_path, p12_password)
         profile = ProvisioningProfile(prov_path)
         
+        # Validate inputs exist
+        if not os.path.exists(ipa_path):
+            raise Exception("IPA file not found")
+        if not os.path.exists(p12_path):
+            raise Exception("P12 certificate not found")
+        if not os.path.exists(prov_path):
+            raise Exception("Provisioning profile not found")
+            
+        # Sign IPA using custom implementation
         with IPASigner(ipa_path, cert_handler, profile) as signer:
             signed_ipa = signer.sign()
-            if signed_ipa:
-                # Move to permanent location
-                output_dir = os.path.dirname(ipa_path)
-                final_path = os.path.join(output_dir, 'signed.ipa')
-                shutil.move(signed_ipa, final_path)
-                return final_path
-                
-        logger.warning("Custom signing failed, falling back to zsign...")
-        
-        # Fallback to zsign
-        if not install_zsign():
-            raise Exception("Failed to install zsign")
-            
-        # Create temp directory for output
-        temp_dir = tempfile.mkdtemp()
-        output_path = os.path.join(temp_dir, 'signed.ipa')
-        
-        try:
-            # Build zsign command
-            cmd = [
-                'zsign',
-                '-k', p12_path,
-                '-p', p12_password,
-                '-m', prov_path,
-                '-o', output_path,
-                '-z', '9',
-                ipa_path
-            ]
-            
-            # Execute zsign
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            
-            if not os.path.exists(output_path):
-                raise Exception("Signing failed - no output file created")
+            if not signed_ipa:
+                raise Exception("Failed to sign IPA - check logs for details")
                 
             # Move to final location
             final_path = os.path.join(os.path.dirname(ipa_path), 'signed.ipa')
-            shutil.move(output_path, final_path)
+            shutil.move(signed_ipa, final_path)
             return final_path
             
-        finally:
-            # Cleanup temp directory
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir)
-                
-    except subprocess.CalledProcessError as e:
-        raise Exception(f"Signing failed: {e.stderr}")
     except Exception as e:
-        raise Exception(f"Signing failed: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"IPA signing failed: {error_msg}")
+        raise Exception(f"IPA signing failed: {error_msg}")
