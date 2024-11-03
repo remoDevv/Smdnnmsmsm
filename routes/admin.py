@@ -4,23 +4,46 @@ from models import Admin, APIKey, SigningJob, db
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
 from sqlalchemy import func
+import logging
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/albos')
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        if request.form['password'] == 'albos':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if not username or not password:
+            flash('Username and password are required', 'danger')
+            return render_template('admin/login.html')
+            
+        if username == 'admin' and password == 'albos':
             admin = Admin.query.filter_by(username='admin').first()
             if not admin:
                 admin = Admin(username='admin')
                 admin.set_password('albos')
                 db.session.add(admin)
                 db.session.commit()
+                logger.info('Created new admin user')
+            
             login_user(admin)
+            logger.info(f'Admin user {username} logged in successfully')
             return redirect(url_for('admin.dashboard'))
-        flash('Invalid password')
+        
+        flash('Invalid username or password', 'danger')
+        logger.warning(f'Failed login attempt for username: {username}')
     return render_template('admin/login.html')
+
+@admin_bp.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('You have been logged out', 'info')
+    return redirect(url_for('admin.login'))
 
 @admin_bp.route('/dashboard')
 @login_required
