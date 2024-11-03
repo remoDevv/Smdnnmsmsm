@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>API Documentation</h2>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h4>Authentication</h4>
+    </div>
+    <div class="card-body">
+        <p>All API requests require an API key to be sent in the <code>X-API-Key</code> header.</p>
+        <pre><code>X-API-Key: your-api-key-here</code></pre>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h4>Sign IPA File</h4>
+    </div>
+    <div class="card-body">
+        <h5>Endpoint</h5>
+        <pre><code>POST /api/sign</code></pre>
+
+        <h5>Request</h5>
+        <p>Content-Type: multipart/form-data</p>
+        
+        <h5>Parameters</h5>
+        <ul>
+            <li><code>ipa</code> - The IPA file to sign (file upload)</li>
+            <li><code>p12</code> - The P12 certificate file (file upload)</li>
+            <li><code>mobileprovision</code> - The mobile provisioning profile (file upload)</li>
+            <li><code>p12_password</code> - The password for the P12 certificate (form field)</li>
+        </ul>
+
+        <h5>Example Response</h5>
+        <pre><code>{
+    "status": "success",
+    "job_id": 123,
+    "message": "IPA signed successfully"
+}</code></pre>
+
+        <h5>Rate Limits</h5>
+        <ul>
+            <li>Regular API keys: 10 requests per day</li>
+            <li>Premium API keys: 100 requests per day</li>
+        </ul>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h4>Example Usage</h4>
+    </div>
+    <div class="card-body">
+        <pre><code>curl -X POST \
+    -H "X-API-Key: your-api-key" \
+    -F "ipa=@app.ipa" \
+    -F "p12=@cert.p12" \
+    -F "mobileprovision=@profile.mobileprovision" \
+    -F "p12_password=your-password" \
+    https://your-domain.com/api/sign</code></pre>
+    </div>
+</div>
+{% endblock %}

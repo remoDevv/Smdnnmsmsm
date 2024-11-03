@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>API Key Management</h2>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h4>Create New API Key</h4>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('admin.create_key') }}">
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-label">Name</label>
+                    <input type="text" name="name" class="form-control" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Tier</label>
+                    <select name="tier" class="form-select" required>
+                        <option value="regular">Regular (10 requests/day)</option>
+                        <option value="premium">Premium (100 requests/day)</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary d-block">Create Key</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h4>Existing API Keys</h4>
+    </div>
+    <div class="card-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Key</th>
+                    <th>Tier</th>
+                    <th>Usage Today</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key in api_keys %}
+                <tr>
+                    <td>{{ key.name }}</td>
+                    <td><code>{{ key.key }}</code></td>
+                    <td>{{ key.tier }}</td>
+                    <td>{{ key.daily_usage }}/{{ key.get_daily_limit() }}</td>
+                    <td>
+                        {% if key.is_active %}
+                        <span class="badge bg-success">Active</span>
+                        {% else %}
+                        <span class="badge bg-danger">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('admin.toggle_key', key_id=key.id) }}" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-warning">
+                                {{ 'Deactivate' if key.is_active else 'Activate' }}
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

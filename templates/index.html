@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="px-4 py-5 my-5 text-center">
+    <h1 class="display-5 fw-bold text-body-emphasis">IPA Signing Service</h1>
+    <div class="col-lg-6 mx-auto">
+        <p class="lead mb-4">
+            Secure and reliable iOS app signing service with enterprise-grade features.
+            Get started with our API to automate your app signing workflow.
+        </p>
+        <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
+            <a href="{{ url_for('web.docs') }}" class="btn btn-primary btn-lg px-4 gap-3">View Documentation</a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Regular API Key</h5>
+                <p class="card-text">
+                    - 10 signing requests per day<br>
+                    - Basic support<br>
+                    - Standard processing
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Premium API Key</h5>
+                <p class="card-text">
+                    - 100 signing requests per day<br>
+                    - Priority support<br>
+                    - Fast-track processing
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Enterprise Features</h5>
+                <p class="card-text">
+                    - Secure file handling<br>
+                    - API key management<br>
+                    - Usage monitoring
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
