@@ -1,15 +1,20 @@
-import OpenSSL
 import logging
-from typing import Tuple, Optional
+from typing import Optional, Tuple
+from cryptography.hazmat.primitives.serialization import pkcs12
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.x509 import Certificate
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 
 logger = logging.getLogger(__name__)
 
 class CertificateHandler:
     def __init__(self, p12_path: str, password: str):
+        """Initialize certificate handler with P12 file path and password"""
         self.p12_path = p12_path
         self.password = password.encode() if password else None
-        self._cert = None
         self._private_key = None
+        self._cert = None
         
     def load(self) -> bool:
         """Load and validate P12 certificate"""
@@ -18,11 +23,15 @@ class CertificateHandler:
             with open(self.p12_path, 'rb') as f:
                 p12_data = f.read()
                 
-            # Parse P12
-            p12 = OpenSSL.crypto.load_pkcs12(p12_data, self.password)
-            self._cert = p12.get_certificate()
-            self._private_key = p12.get_privatekey()
+            # Parse P12 using cryptography
+            self._private_key, self._cert, _ = pkcs12.load_key_and_certificates(
+                p12_data, 
+                self.password
+            )
             
+            if not isinstance(self._private_key, RSAPrivateKey):
+                raise ValueError("Private key must be RSA")
+                
             return True
         except Exception as e:
             logger.error(f"Failed to load P12 certificate: {str(e)}")
@@ -34,24 +43,46 @@ class CertificateHandler:
             return None
             
         try:
-            subject = self._cert.get_subject()
             return {
-                'common_name': subject.CN,
-                'organization': subject.O,
-                'expiry': self._cert.get_notAfter().decode()
+                'common_name': self._cert.subject.get_attributes_for_oid(
+                    self._cert.oid.COMMON_NAME)[0].value,
+                'organization': self._cert.subject.get_attributes_for_oid(
+                    self._cert.oid.ORGANIZATION_NAME)[0].value,
+                'expiry': self._cert.not_valid_after.isoformat()
             }
         except Exception as e:
             logger.error(f"Failed to get certificate info: {str(e)}")
             return None
             
     def sign_data(self, data: bytes) -> Optional[bytes]:
-        """Sign data using the private key"""
+        """Sign data using the private key with modern crypto APIs"""
         if not self._private_key:
             return None
             
         try:
-            signature = OpenSSL.crypto.sign(self._private_key, data, 'sha256')
+            signature = self._private_key.sign(
+                data,
+                padding.PKCS1v15(),
+                hashes.SHA256()
+            )
             return signature
         except Exception as e:
             logger.error(f"Failed to sign data: {str(e)}")
             return None
+            
+    def get_common_name(self) -> Optional[str]:
+        """Get certificate common name for codesign"""
+        if not self._cert:
+            return None
+            
+        try:
+            return self._cert.subject.get_attributes_for_oid(
+                self._cert.oid.COMMON_NAME)[0].value
+        except Exception as e:
+            logger.error(f"Failed to get common name: {str(e)}")
+            return None
+            
+    def cleanup(self):
+        """Clean up resources"""
+        self._private_key = None
+        self._cert = None

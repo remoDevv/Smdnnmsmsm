@@ -4,7 +4,7 @@ import zipfile
 import logging
 import tempfile
 import plistlib
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from .certificate_handler import CertificateHandler
 from .provisioning import ProvisioningProfile
 
@@ -23,8 +23,10 @@ class IPASigner:
         return self
         
     def __exit__(self, exc_type, exc_val, exc_tb):
+        # Cleanup temp directory and certificate handler
         if self.temp_dir and os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
+        self.cert_handler.cleanup()
             
     def _find_binaries(self, app_dir: str) -> List[str]:
         """Find all Mach-O binaries in the app bundle"""
@@ -77,8 +79,13 @@ class IPASigner:
             with open(entitlements_path, 'wb') as f:
                 plistlib.dump(entitlements, f)
                 
+            # Get certificate common name for signing
+            common_name = self.cert_handler.get_common_name()
+            if not common_name:
+                raise Exception("Failed to get certificate common name")
+                
             # Use codesign to sign the binary
-            os.system(f'codesign --force --sign "{self.cert_handler._cert.get_subject().CN}" '
+            os.system(f'codesign --force --sign "{common_name}" '
                      f'--entitlements "{entitlements_path}" "{binary_path}"')
                      
             return True

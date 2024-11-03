@@ -14,4 +14,5 @@ dependencies = [
     "discord-py>=2.4.0",
     "requests>=2.32.3",
     "pyopenssl>=24.2.1",
+    "cryptography>=41.0.0",
 ]
