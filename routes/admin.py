@@ -1,10 +1,13 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, session
 from flask_login import login_user, login_required, logout_user
 from models import Admin, APIKey, SigningJob, db
 from werkzeug.security import generate_password_hash
+from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from sqlalchemy import func
 import logging
+import os
+from utils.signing import sign_ipa
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/albos')
 
@@ -105,6 +108,78 @@ def analytics():
                          key_names=key_names,
                          key_usage=key_usage,
                          recent_jobs=recent_jobs)
+
+@admin_bp.route('/test', methods=['GET', 'POST'])
+@login_required
+def test():
+    if request.method == 'POST':
+        if 'ipa' not in request.files or 'p12' not in request.files or 'mobileprovision' not in request.files:
+            flash('All files are required', 'danger')
+            return render_template('admin/test.html')
+
+        p12_password = request.form.get('p12_password')
+        if not p12_password:
+            flash('P12 password is required', 'danger')
+            return render_template('admin/test.html')
+
+        # Save files
+        upload_folder = '/tmp/zsign_uploads'
+        os.makedirs(upload_folder, exist_ok=True)
+
+        ipa_file = request.files['ipa']
+        p12_file = request.files['p12']
+        prov_file = request.files['mobileprovision']
+        
+        ipa_path = os.path.join(upload_folder, secure_filename(ipa_file.filename))
+        p12_path = os.path.join(upload_folder, secure_filename(p12_file.filename))
+        prov_path = os.path.join(upload_folder, secure_filename(prov_file.filename))
+        
+        try:
+            ipa_file.save(ipa_path)
+            p12_file.save(p12_path)
+            prov_file.save(prov_path)
+            
+            # Sign the IPA
+            output_path = sign_ipa(ipa_path, p12_path, prov_path, p12_password)
+            
+            # Store the output path in session for download
+            session['signed_ipa_path'] = output_path
+            
+            flash('IPA signed successfully!', 'success')
+            return render_template('admin/test.html', signed_file_path=output_path)
+            
+        except Exception as e:
+            flash(f'Error signing IPA: {str(e)}', 'danger')
+            return render_template('admin/test.html')
+        finally:
+            # Cleanup input files
+            for path in [ipa_path, p12_path, prov_path]:
+                if os.path.exists(path):
+                    os.remove(path)
+    
+    return render_template('admin/test.html')
+
+@admin_bp.route('/download_signed_ipa')
+@login_required
+def download_signed_ipa():
+    file_path = request.args.get('file_path')
+    if not file_path or not os.path.exists(file_path):
+        flash('Signed IPA file not found', 'danger')
+        return redirect(url_for('admin.test'))
+    
+    try:
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name='signed.ipa'
+        )
+    except Exception as e:
+        flash(f'Error downloading file: {str(e)}', 'danger')
+        return redirect(url_for('admin.test'))
+    finally:
+        # Cleanup the signed file after download
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
 @admin_bp.route('/keys/create', methods=['POST'])
 @login_required

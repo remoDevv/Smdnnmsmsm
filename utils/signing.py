@@ -2,11 +2,16 @@ import os
 import subprocess
 import tempfile
 import shutil
+from .install_zsign import install_zsign
 
 def sign_ipa(ipa_path, p12_path, prov_path, p12_password):
     """
     Sign an IPA file using zsign
     """
+    # Ensure zsign is installed
+    if not install_zsign():
+        raise Exception("Failed to install zsign")
+        
     # Create temp directory for output
     temp_dir = tempfile.mkdtemp()
     output_path = os.path.join(temp_dir, 'signed.ipa')
