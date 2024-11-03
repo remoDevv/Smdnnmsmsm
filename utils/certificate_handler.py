@@ -44,8 +44,7 @@ class CertificateHandler:
             
         try:
             return {
-                'common_name': self._cert.subject.get_attributes_for_oid(
-                    self._cert.oid.COMMON_NAME)[0].value,
+                'common_name': self.get_common_name(),
                 'organization': self._cert.subject.get_attributes_for_oid(
                     self._cert.oid.ORGANIZATION_NAME)[0].value,
                 'expiry': self._cert.not_valid_after.isoformat()
@@ -71,13 +70,14 @@ class CertificateHandler:
             return None
             
     def get_common_name(self) -> Optional[str]:
-        """Get certificate common name for codesign"""
         if not self._cert:
             return None
             
         try:
-            return self._cert.subject.get_attributes_for_oid(
-                self._cert.oid.COMMON_NAME)[0].value
+            for attribute in self._cert.subject:
+                if attribute.oid._name == 'commonName':
+                    return attribute.value
+            return None
         except Exception as e:
             logger.error(f"Failed to get common name: {str(e)}")
             return None

@@ -70,29 +70,33 @@ class IPASigner:
         except Exception as e:
             logger.error(f"Failed to update Info.plist: {str(e)}")
             return False
-            
+
     def _sign_binary(self, binary_path: str, entitlements: dict) -> bool:
-        """Sign a single Mach-O binary"""
         try:
             # Create temporary entitlements file
             entitlements_path = os.path.join(self.temp_dir, 'entitlements.plist')
             with open(entitlements_path, 'wb') as f:
                 plistlib.dump(entitlements, f)
                 
-            # Get certificate common name for signing
+            # Get certificate common name
             common_name = self.cert_handler.get_common_name()
             if not common_name:
                 raise Exception("Failed to get certificate common name")
                 
-            # Use codesign to sign the binary
-            os.system(f'codesign --force --sign "{common_name}" '
-                     f'--entitlements "{entitlements_path}" "{binary_path}"')
-                     
+            logger.info(f"Signing {binary_path} with certificate: {common_name}")
+            
+            # Use codesign command
+            result = os.system(f'codesign --force --sign "{common_name}" '
+                            f'--entitlements "{entitlements_path}" "{binary_path}"')
+            
+            if result != 0:
+                raise Exception(f"codesign command failed with exit code {result}")
+                
             return True
         except Exception as e:
             logger.error(f"Failed to sign binary {binary_path}: {str(e)}")
             return False
-            
+                    
     def _unzip_ipa(self) -> Optional[str]:
         """Extract IPA contents"""
         try:
