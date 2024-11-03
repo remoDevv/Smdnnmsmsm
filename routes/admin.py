@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, session
-from flask_login import login_user, login_required, logout_user
+from flask_login import login_user, login_required, logout_user, current_user
 from models import Admin, APIKey, SigningJob, db
 from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
@@ -8,11 +8,37 @@ from sqlalchemy import func
 import logging
 import os
 from utils.signing import sign_ipa
+from functools import wraps
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/albos')
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def enterprise_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated and not session.get('enterprise_access'):
+            flash('Enterprise API key required for access', 'warning')
+            return redirect(url_for('admin.analytics'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@admin_bp.route('/verify_enterprise_key', methods=['POST'])
+def verify_enterprise_key():
+    api_key = request.form.get('api_key')
+    if not api_key:
+        flash('API key is required', 'danger')
+        return redirect(url_for('admin.analytics'))
+
+    key = APIKey.query.filter_by(key=api_key, tier='enterprise', is_active=True).first()
+    if not key:
+        flash('Invalid or non-enterprise API key', 'danger')
+        return redirect(url_for('admin.analytics'))
+
+    session['enterprise_access'] = True
+    flash('Enterprise API key verified successfully', 'success')
+    return redirect(url_for('admin.analytics'))
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -45,6 +71,7 @@ def login():
 @login_required
 def logout():
     logout_user()
+    session.pop('enterprise_access', None)
     flash('You have been logged out', 'info')
     return redirect(url_for('admin.login'))
 
@@ -55,7 +82,7 @@ def dashboard():
     return render_template('admin/dashboard.html', api_keys=api_keys)
 
 @admin_bp.route('/analytics')
-@login_required
+@enterprise_required
 def analytics():
     # Get data for the past 7 days
     end_date = datetime.utcnow()

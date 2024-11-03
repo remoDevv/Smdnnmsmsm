@@ -19,7 +19,7 @@ class APIKey(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(64), unique=True, nullable=False)
     name = db.Column(db.String(100), nullable=False)
-    tier = db.Column(db.String(20), nullable=False)  # 'regular' or 'premium'
+    tier = db.Column(db.String(20), nullable=False)  # 'regular', 'premium', or 'enterprise'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_used = db.Column(db.DateTime)
     daily_usage = db.Column(db.Integer, default=0)
@@ -30,7 +30,12 @@ class APIKey(db.Model):
         return str(uuid.uuid4())
 
     def get_daily_limit(self):
-        return 100 if self.tier == 'premium' else 10
+        limits = {
+            'regular': 10,
+            'premium': 100,
+            'enterprise': 1000
+        }
+        return limits.get(self.tier, 10)
 
 class SigningJob(db.Model):
     id = db.Column(db.Integer, primary_key=True)

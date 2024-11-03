@@ -22,6 +22,7 @@
                     <select name="tier" class="form-select" required>
                         <option value="regular">Regular (10 requests/day)</option>
                         <option value="premium">Premium (100 requests/day)</option>
+                        <option value="enterprise">Enterprise (1000 requests/day)</option>
                     </select>
                 </div>
                 <div class="col-md-4">
@@ -54,7 +55,11 @@
                 <tr>
                     <td>{{ key.name }}</td>
                     <td><code>{{ key.key }}</code></td>
-                    <td>{{ key.tier }}</td>
+                    <td>
+                        <span class="badge bg-{% if key.tier == 'enterprise' %}primary{% elif key.tier == 'premium' %}info{% else %}secondary{% endif %}">
+                            {{ key.tier|title }}
+                        </span>
+                    </td>
                     <td>{{ key.daily_usage }}/{{ key.get_daily_limit() }}</td>
                     <td>
                         {% if key.is_active %}
