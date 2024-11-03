@@ -3,9 +3,10 @@ import shutil
 import zipfile
 import logging
 import tempfile
-from typing import Optional
+import plistlib
+from typing import Optional, List, Tuple
 from .certificate_handler import CertificateHandler
-from .provisioning.py import ProvisioningProfile
+from .provisioning import ProvisioningProfile
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,66 @@ class IPASigner:
         if self.temp_dir and os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
             
+    def _find_binaries(self, app_dir: str) -> List[str]:
+        """Find all Mach-O binaries in the app bundle"""
+        binaries = []
+        
+        for root, _, files in os.walk(app_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                # Check if file is Mach-O binary using file magic
+                try:
+                    with open(file_path, 'rb') as f:
+                        magic = f.read(4)
+                        if magic.startswith(b'\xca\xfe\xba\xbe') or \
+                           magic.startswith(b'\xce\xfa\xed\xfe') or \
+                           magic.startswith(b'\xcf\xfa\xed\xfe'):
+                            binaries.append(file_path)
+                except:
+                    continue
+                    
+        return binaries
+            
+    def _update_info_plist(self, app_dir: str) -> bool:
+        """Update Info.plist with new bundle ID and entitlements"""
+        try:
+            info_plist_path = os.path.join(app_dir, 'Info.plist')
+            with open(info_plist_path, 'rb') as f:
+                info_plist = plistlib.load(f)
+                
+            # Update with provisioning profile data
+            entitlements = self.profile.get_entitlements()
+            if entitlements:
+                bundle_id = entitlements.get('application-identifier', '').split('.')[-1]
+                if bundle_id:
+                    info_plist['CFBundleIdentifier'] = bundle_id
+                    
+            # Write updated plist
+            with open(info_plist_path, 'wb') as f:
+                plistlib.dump(info_plist, f)
+                
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update Info.plist: {str(e)}")
+            return False
+            
+    def _sign_binary(self, binary_path: str, entitlements: dict) -> bool:
+        """Sign a single Mach-O binary"""
+        try:
+            # Create temporary entitlements file
+            entitlements_path = os.path.join(self.temp_dir, 'entitlements.plist')
+            with open(entitlements_path, 'wb') as f:
+                plistlib.dump(entitlements, f)
+                
+            # Use codesign to sign the binary
+            os.system(f'codesign --force --sign "{self.cert_handler._cert.get_subject().CN}" '
+                     f'--entitlements "{entitlements_path}" "{binary_path}"')
+                     
+            return True
+        except Exception as e:
+            logger.error(f"Failed to sign binary {binary_path}: {str(e)}")
+            return False
+            
     def _unzip_ipa(self) -> Optional[str]:
         """Extract IPA contents"""
         try:
@@ -43,20 +104,6 @@ class IPASigner:
         except Exception as e:
             logger.error(f"Failed to unzip IPA: {str(e)}")
             return None
-            
-    def _sign_mach_o(self, binary_path: str) -> bool:
-        """Sign Mach-O binary"""
-        try:
-            # TODO: Implement Mach-O binary signing
-            # This will involve:
-            # 1. Parse Mach-O headers
-            # 2. Calculate code directory hash
-            # 3. Generate signature using certificate
-            # 4. Attach signature to binary
-            return True
-        except Exception as e:
-            logger.error(f"Failed to sign binary: {str(e)}")
-            return False
             
     def _repackage_ipa(self, app_dir: str) -> Optional[str]:
         """Repackage signed app into IPA"""
@@ -87,17 +134,33 @@ class IPASigner:
             if not self.profile.load():
                 raise Exception("Failed to load provisioning profile")
                 
+            # Check profile validity
+            if not self.profile.is_valid():
+                raise Exception("Provisioning profile is expired or invalid")
+                
             # Unzip IPA
             app_dir = self._unzip_ipa()
             if not app_dir:
                 raise Exception("Failed to unzip IPA")
                 
+            # Update Info.plist
+            if not self._update_info_plist(app_dir):
+                raise Exception("Failed to update Info.plist")
+                
+            # Copy provisioning profile
+            profile_dest = os.path.join(app_dir, 'embedded.mobileprovision')
+            shutil.copy2(self.profile.profile_path, profile_dest)
+                
             # Sign all binaries
-            # TODO: Implement binary signing logic
+            entitlements = self.profile.get_entitlements()
+            if not entitlements:
+                raise Exception("Failed to get entitlements from profile")
                 
-            # Update Info.plist and entitlements
-            # TODO: Implement entitlements handling
-                
+            binaries = self._find_binaries(app_dir)
+            for binary in binaries:
+                if not self._sign_binary(binary, entitlements):
+                    raise Exception(f"Failed to sign binary: {binary}")
+                    
             # Repackage IPA
             signed_ipa = self._repackage_ipa(app_dir)
             if not signed_ipa:
