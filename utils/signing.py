@@ -1,53 +1,56 @@
 import os
-import shutil
+import subprocess
 import logging
-from .ipa_signer import IPASigner
-from .certificate_handler import CertificateHandler
-from .provisioning import ProvisioningProfile
+import shutil
+from werkzeug.utils import secure_filename
 
 logger = logging.getLogger(__name__)
 
 def sign_ipa(ipa_path: str, p12_path: str, prov_path: str, p12_password: str) -> str:
-    """
-    Sign an IPA file using custom implementation
-    
-    Args:
-        ipa_path: Path to input IPA file
-        p12_path: Path to P12 certificate
-        prov_path: Path to provisioning profile
-        p12_password: Password for P12 certificate
-        
-    Returns:
-        Path to signed IPA file
-        
-    Raises:
-        Exception: If signing fails with detailed error message
-    """
     try:
-        # Initialize handlers
-        cert_handler = CertificateHandler(p12_path, p12_password)
-        profile = ProvisioningProfile(prov_path)
+        # Create temp directory for zsign binary if not exists
+        zsign_dir = '/tmp/zsign'
+        os.makedirs(zsign_dir, exist_ok=True)
         
-        # Validate inputs exist
-        if not os.path.exists(ipa_path):
-            raise Exception("IPA file not found")
-        if not os.path.exists(p12_path):
-            raise Exception("P12 certificate not found")
-        if not os.path.exists(prov_path):
-            raise Exception("Provisioning profile not found")
+        # Clone zsign if not already present
+        if not os.path.exists(os.path.join(zsign_dir, 'zsign')):
+            subprocess.run(['git', 'clone', 'https://github.com/gyke69/compiled-zsign.git', zsign_dir], check=True)
+            subprocess.run(['chmod', '+x', os.path.join(zsign_dir, 'zsign')], check=True)
+        
+        # Prepare output path
+        output_dir = os.path.dirname(ipa_path)
+        output_path = os.path.join(output_dir, 'signed.ipa')
+        
+        # Build zsign command
+        cmd = [
+            os.path.join(zsign_dir, 'zsign'),
+            '-k', p12_path,
+            '-p', p12_password,
+            '-m', prov_path,
+            '-o', output_path,
+            '-z', '9',
+            ipa_path
+        ]
+        
+        # Execute zsign
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        
+        if not os.path.exists(output_path):
+            raise Exception("Failed to generate signed IPA")
             
-        # Sign IPA using custom implementation
-        with IPASigner(ipa_path, cert_handler, profile) as signer:
-            signed_ipa = signer.sign()
-            if not signed_ipa:
-                raise Exception("Failed to sign IPA - check logs for details")
-                
-            # Move to final location
-            final_path = os.path.join(os.path.dirname(ipa_path), 'signed.ipa')
-            shutil.move(signed_ipa, final_path)
-            return final_path
-            
+        return output_path
+        
+    except subprocess.CalledProcessError as e:
+        error_msg = f"zsign failed: {e.stderr}"
+        logger.error(error_msg)
+        if "password error" in e.stderr.lower():
+            raise Exception("Invalid P12 certificate password")
+        elif "provision error" in e.stderr.lower():
+            raise Exception("Invalid provisioning profile")
+        elif "bundle id" in e.stderr.lower():
+            raise Exception("Bundle ID mismatch between IPA and provisioning profile")
+        raise Exception(error_msg)
     except Exception as e:
-        error_msg = str(e)
-        logger.error(f"IPA signing failed: {error_msg}")
-        raise Exception(f"IPA signing failed: {error_msg}")
+        error_msg = f"Signing failed: {str(e)}"
+        logger.error(error_msg)
+        raise Exception(error_msg)
